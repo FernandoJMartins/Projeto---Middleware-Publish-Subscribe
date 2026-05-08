@@ -13,6 +13,7 @@ const (
 	clientSendSize = 256 // Tamanho do canal de envio para cada cliente
 )
 
+// frame - Envelope de mensagem entre cliente e broker.
 type frame struct {
 	Type  string          `json:"type"`
 	ID    string          `json:"id,omitempty"`
@@ -39,7 +40,7 @@ type clientConn struct { // Estrutura para representar uma conexão de cliente
 }
 
 type Broker struct { // Estrutura principal do broker
-	mu       sync.RWMutex // Mutex para proteger o acesso às estruturas de dados compartilhadas
+	mu       sync.RWMutex // Protege o acesso às estruturas de dados compartilhadas
 	topics   map[string]*topic
 	clients  map[*clientConn]struct{}
 	listener net.Listener
@@ -71,8 +72,7 @@ func (b *Broker) Start(addr string) error {
 
 // Stop - Para o broker
 func (b *Broker) Stop() error {
-	// TODO: Implementar
-	if b.listener != nil {
+	if b.listener == nil {
 		return errors.New("broker not started")
 	}
 	close(b.quit)
@@ -109,6 +109,7 @@ func (b *Broker) acceptLoop() {
 			conn: conn,
 			enc:  json.NewEncoder(conn),
 			dec:  json.NewDecoder(conn),
+			send: make(chan frame, clientSendSize),
 			subs: make(map[string]struct{}),
 			quit: make(chan struct{}),
 		}
@@ -183,7 +184,7 @@ func (b *Broker) handleSubscribe(c *clientConn, f frame) {
 	}
 	t.subs[c] = struct{}{}       // Adiciona o cliente à lista de inscritos do tópico
 	c.subs[f.Topic] = struct{}{} // Marca que o cliente está inscrito no tópico
-	b.mu.Unlock()                // Protege o acesso às estruturas de dados compartilhadas
+	b.mu.Unlock()
 
 	_ = b.sendAck(c, f.ID, true, "")
 }
@@ -194,11 +195,11 @@ func (b *Broker) handlePublish(c *clientConn, f frame) {
 		return
 	}
 
-	b.mu.Lock()
+	b.mu.RLock()
 	t := b.topics[f.Topic]
 	b.mu.RUnlock()
 	if t == nil {
-		_ = b.sendAck(c, f.ID, false, "topic not found")
+		_ = b.sendAck(c, f.ID, false, "no_subscribers")
 		return
 	}
 
@@ -218,13 +219,23 @@ func (b *Broker) handleUnsubscribe(c *clientConn, f frame) {
 		return
 	}
 
-	b.mu.Lock() // Protege o acesso às estruturas de dados compartilhadas
+	b.mu.Lock()
 	t := b.topics[f.Topic]
 	if t == nil {
 		b.mu.Unlock()
 		_ = b.sendAck(c, f.ID, false, "topic not found")
 		return
 	}
+
+	delete(t.subs, c)
+	delete(c.subs, f.Topic)
+	if len(t.subs) == 0 {
+		delete(b.topics, f.Topic)
+		close(t.quit)
+	}
+	b.mu.Unlock()
+
+	_ = b.sendAck(c, f.ID, true, "")
 
 }
 
@@ -268,6 +279,9 @@ func (b *Broker) cleanupClient(c *clientConn) {
 	b.mu.Lock()
 	for topicName := range c.subs {
 		t := b.topics[topicName]
+		if t == nil {
+			continue
+		}
 		delete(t.subs, c) // Remove o cliente da lista de inscritos do tópico
 		if len(t.subs) == 0 {
 			close(t.quit) // Encerra o tópico se não houver mais inscritos
@@ -276,5 +290,7 @@ func (b *Broker) cleanupClient(c *clientConn) {
 	}
 	delete(b.clients, c)
 	b.mu.Unlock()
-	c.conn.Close() // Fecha a conexão do cliente
+
+	close(c.quit)
+	_ = c.conn.Close() // Fecha a conexão do cliente
 }
