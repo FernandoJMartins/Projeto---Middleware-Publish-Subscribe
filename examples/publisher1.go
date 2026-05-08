@@ -8,7 +8,7 @@ import (
 	"middleware-pubsub/client"
 )
 
-func main() {
+func runPublisher1() {
 	fmt.Println("Publisher 1 iniciado")
 
 	addr := getEnv("BROKER_ADDR", "localhost:9000")

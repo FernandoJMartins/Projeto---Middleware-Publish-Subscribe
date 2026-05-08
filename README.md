@@ -76,14 +76,14 @@ No diretorio do projeto:
 	- `go run ./broker -addr :9001`
 3. Em outro terminal, rode os publishers:
 	- `set BROKER_ADDR=localhost:9000` (Windows CMD)
-	- `go run ./examples/publisher1.go`
-	- `go run ./examples/publisher2.go`
+	- `go run ./examples -mode publisher1`
+	- `go run ./examples -mode publisher2`
 
 Se estiver usando duas instancias do broker, use:
 
 - `set BROKER_ADDR=localhost:9000,localhost:9001`
 
-Depois de implementar os subscribers, rode:
+Depois rode os subscribers:
 
-- `go run ./examples/subscriber1.go`
-- `go run ./examples/subscriber2.go`
+- `go run ./examples -mode subscriber1`
+- `go run ./examples -mode subscriber2`
