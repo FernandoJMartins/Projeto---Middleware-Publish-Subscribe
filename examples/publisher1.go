@@ -3,9 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
-	"os"
-	"os/signal"
 	"time"
 
 	"middleware-pubsub/client"
@@ -21,14 +18,13 @@ func main() {
 	}
 	defer c.Close()
 
-	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randSrc := newRand()
 	tLoc := time.NewTicker(2 * time.Second)
 	tTemp := time.NewTicker(3 * time.Second)
 	defer tLoc.Stop()
 	defer tTemp.Stop()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	stop := interruptChan()
 
 	for {
 		select {
@@ -52,11 +48,4 @@ func main() {
 			return
 		}
 	}
-}
-
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }

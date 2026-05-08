@@ -3,9 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
-	"os"
-	"os/signal"
 	"time"
 
 	"middleware-pubsub/client"
@@ -21,14 +18,13 @@ func main() {
 	}
 	defer c.Close()
 
-	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randSrc := newRand()
 	tUser := time.NewTicker(4 * time.Second)
 	tAlert := time.NewTicker(5 * time.Second)
 	defer tUser.Stop()
 	defer tAlert.Stop()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	stop := interruptChan()
 
 	userID := 1000
 	for {
@@ -54,21 +50,4 @@ func main() {
 			return
 		}
 	}
-}
-
-func pickAction(r *rand.Rand) string {
-	actions := []string{"novo", "atualizacao", "cancelamento"}
-	return actions[r.Intn(len(actions))]
-}
-
-func pickLevel(r *rand.Rand) string {
-	levels := []string{"info", "warning", "critical"}
-	return levels[r.Intn(len(levels))]
-}
-
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
