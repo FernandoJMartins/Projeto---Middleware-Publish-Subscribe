@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"time"
+)
+
 // handleSubscribe - Registra o cliente no tópico.
 func (b *Broker) handleSubscribe(c *clientConn, f frame) {
 	if f.Topic == "" {
@@ -52,8 +57,12 @@ func (b *Broker) handlePublish(c *clientConn, f frame) {
 
 	msg := frame{
 		Type:  "message",
+		ID:    f.ID,
 		Topic: f.Topic,
 		Data:  f.Data,
+	}
+	if msg.ID == "" {
+		msg.ID = fmt.Sprintf("msg-%d", time.Now().UnixNano())
 	}
 	t.inbox <- msg
 

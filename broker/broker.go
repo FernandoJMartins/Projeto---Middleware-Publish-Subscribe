@@ -99,13 +99,14 @@ func (b *Broker) acceptLoop() {
 		brokerLog.Infof("Cliente conectado: %s", remoteAddr)
 
 		c := &clientConn{
-			addr: remoteAddr,
-			conn: conn,
-			enc:  json.NewEncoder(conn),
-			dec:  json.NewDecoder(conn),
-			send: make(chan frame, clientSendSize),
-			subs: make(map[string]struct{}),
-			quit: make(chan struct{}),
+			addr:    remoteAddr,
+			conn:    conn,
+			enc:     json.NewEncoder(conn),
+			dec:     json.NewDecoder(conn),
+			send:    make(chan frame, clientSendSize),
+			subs:    make(map[string]struct{}),
+			quit:    make(chan struct{}),
+			pending: make(map[string]frame),
 		}
 
 		b.mu.Lock()
@@ -115,5 +116,7 @@ func (b *Broker) acceptLoop() {
 		b.wg.Add(2)
 		go b.writerLoop(c)
 		go b.readerLoop(c)
+		b.wg.Add(1)
+		go b.deliveryRetryLoop(c)
 	}
 }

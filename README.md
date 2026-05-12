@@ -40,6 +40,12 @@ Regras importantes:
 - Se nao houver inscritos no topico, o `publish` responde com `ok=false` e `error="no_subscribers"`.
 - Mensagens sao bufferizadas por topico, entao o broker continua aceitando novos `publish`.
 
+## Garantia de Entrega (At-Least-Once)
+
+- O broker exige `delivery_ack` do subscriber para cada mensagem.
+- Se o ACK nao chegar, o broker reenvia periodicamente.
+- Isso garante entrega **ao menos uma vez**, podendo gerar **duplicatas** (o consumidor deve tolerar isso).
+
 ## Variaveis de Ambiente
 
 - `BROKER_ADDR`: lista de brokers (ex: `localhost:9000,localhost:9001`).

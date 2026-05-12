@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+var (
+	errBrokerClosed = errors.New("broker connection closed")
+	errAckTimeout   = errors.New("ack timeout")
+)
+
+const publishRetryDelay = 300 * time.Millisecond
+
 type brokerConn struct {
 	// addr identifica o broker (host:port).
 	addr string
@@ -143,7 +150,7 @@ func (c *Client) readerLoop(bc *brokerConn) {
 		}
 		switch f.Type {
 		case "message":
-			c.dispatchMessage(f)
+			c.dispatchMessage(bc, f)
 		case "ack":
 			c.dispatchAck(f)
 		default:
@@ -152,7 +159,7 @@ func (c *Client) readerLoop(bc *brokerConn) {
 	}
 }
 
-func (c *Client) dispatchMessage(f frame) {
+func (c *Client) dispatchMessage(bc *brokerConn, f frame) {
 	if f.Topic == "" {
 		return
 	}
@@ -165,10 +172,22 @@ func (c *Client) dispatchMessage(f frame) {
 	}
 
 	msg := Message{Topic: f.Topic, Data: f.Data}
+	// Entrega bloqueante garante at-least-once para o consumidor.
+	ch <- msg
+
+	if f.ID == "" {
+		return
+	}
+
+	ack := frame{
+		Type:  "delivery_ack",
+		ID:    f.ID,
+		Topic: f.Topic,
+	}
+
 	select {
-	case ch <- msg:
-	default:
-		// Evita bloquear a leitura caso o consumidor esteja lento.
+	case bc.send <- ack:
+	case <-bc.quit:
 	}
 }
 
@@ -197,6 +216,27 @@ func (c *Client) sendAndWait(bc *brokerConn, f frame) error {
 		f.ID = c.nextID()
 	}
 
+	for {
+		err := c.sendOnceAndWait(bc, f)
+		if err == nil {
+			return nil
+		}
+		if err != errAckTimeout && err != errBrokerClosed {
+			return err
+		}
+
+		// Tenta outro broker (ou o mesmo) apos uma pausa curta.
+		time.Sleep(publishRetryDelay)
+		next, nextErr := c.connForTopic(f.Topic)
+		if nextErr != nil {
+			return err
+		}
+		bc = next
+	}
+}
+
+func (c *Client) sendOnceAndWait(bc *brokerConn, f frame) error {
+
 	ch := make(chan frame, 1)
 	c.mu.Lock()
 	// Nao aceita novas operacoes se fechado.
@@ -215,7 +255,7 @@ func (c *Client) sendAndWait(bc *brokerConn, f frame) error {
 		c.mu.Lock()
 		delete(c.pending, f.ID)
 		c.mu.Unlock()
-		return errors.New("broker connection closed")
+		return errBrokerClosed
 	}
 
 	select {
@@ -232,7 +272,7 @@ func (c *Client) sendAndWait(bc *brokerConn, f frame) error {
 		c.mu.Lock()
 		delete(c.pending, f.ID)
 		c.mu.Unlock()
-		return errors.New("ack timeout")
+		return errAckTimeout
 	}
 }
 

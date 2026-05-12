@@ -30,10 +30,7 @@ func (b *Broker) topicLoop(t *topic) {
 			brokerLog.Debugf("Fanout topic=%s subs=%d", t.name, len(subs))
 
 			for _, c := range subs {
-				select {
-				case c.send <- msg:
-				case <-c.quit:
-				}
+				b.enqueueDelivery(c, msg)
 			}
 		case <-t.quit:
 			brokerLog.Infof("Loop do topico finalizado: %s", t.name)
