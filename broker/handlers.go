@@ -7,6 +7,8 @@ func (b *Broker) handleSubscribe(c *clientConn, f frame) {
 		return
 	}
 
+	// Cria topico sob demanda.
+
 	b.mu.Lock()
 	t := b.topics[f.Topic]
 	if t == nil {
@@ -19,10 +21,13 @@ func (b *Broker) handleSubscribe(c *clientConn, f frame) {
 		b.topics[f.Topic] = t
 		b.wg.Add(1)
 		go b.topicLoop(t)
+		brokerLog.Infof("Topico criado: %s", f.Topic)
 	}
 	t.subs[c] = struct{}{}
 	c.subs[f.Topic] = struct{}{}
 	b.mu.Unlock()
+
+	brokerLog.Infof("Cliente %s inscrito em %s", c.addr, f.Topic)
 
 	_ = b.sendAck(c, f.ID, true, "")
 }
@@ -34,10 +39,13 @@ func (b *Broker) handlePublish(c *clientConn, f frame) {
 		return
 	}
 
+	// Se nao houver topico, nao existem inscritos.
+
 	b.mu.RLock()
 	t := b.topics[f.Topic]
 	b.mu.RUnlock()
 	if t == nil {
+		brokerLog.Warnf("Publish descartado (sem inscritos): topic=%s client=%s", f.Topic, c.addr)
 		_ = b.sendAck(c, f.ID, false, "no_subscribers")
 		return
 	}
@@ -48,6 +56,8 @@ func (b *Broker) handlePublish(c *clientConn, f frame) {
 		Data:  f.Data,
 	}
 	t.inbox <- msg
+
+	brokerLog.Debugf("Publish aceito: topic=%s client=%s", f.Topic, c.addr)
 
 	_ = b.sendAck(c, f.ID, true, "")
 }
@@ -72,8 +82,11 @@ func (b *Broker) handleUnsubscribe(c *clientConn, f frame) {
 	if len(t.subs) == 0 {
 		delete(b.topics, f.Topic)
 		close(t.quit)
+		brokerLog.Infof("Topico removido (sem inscritos): %s", f.Topic)
 	}
 	b.mu.Unlock()
+
+	brokerLog.Infof("Cliente %s saiu de %s", c.addr, f.Topic)
 
 	_ = b.sendAck(c, f.ID, true, "")
 }
@@ -86,6 +99,8 @@ func (b *Broker) sendAck(c *clientConn, id string, ok bool, errMsg string) error
 		Ok:    ok,
 		Error: errMsg,
 	}
+
+	// Envia o ACK pelo canal de envio (writerLoop).
 	c.send <- ack
 	return nil
 }

@@ -3,8 +3,10 @@ package main
 import "middleware-pubsub/common/protocol"
 
 const (
-	topicInboxSize = 256 // Tamanho do canal de mensagens por tópico
-	clientSendSize = 256 // Tamanho do canal de envio por cliente
+	// topicInboxSize define o buffer de mensagens por topico.
+	topicInboxSize = 256
+	// clientSendSize define o buffer de envio por cliente.
+	clientSendSize = 256
 )
 
 // frame - Alias local do protocolo compartilhado.

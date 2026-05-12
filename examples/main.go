@@ -2,26 +2,26 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
+
+	"middleware-pubsub/common/logx"
 )
 
 func main() {
-	mode := flag.String("mode", "publisher1", "publisher1|publisher2|subscriber1|subscriber2")
+	// Seleciona qual app de exemplo executar.
+	mode := flag.String("mode", "publisher", "publisher|subscriber")
+	role := flag.String("role", "painel", "painel|alertas")
 	flag.Parse()
 
 	switch *mode {
-	case "publisher1":
-		runPublisher1()
-	case "publisher2":
-		runPublisher2()
-	case "subscriber1":
-		runSubscriber1()
-	case "subscriber2":
-		runSubscriber2()
+	case "publisher":
+		runPublisher()
+	case "subscriber":
+		runSubscriber(*role)
 	default:
-		fmt.Println("Modo invalido:", *mode)
-		fmt.Println("Use: -mode publisher1|publisher2|subscriber1|subscriber2")
+		log := newLogger("EXAMPLES", logx.ColorGray)
+		log.Warnf("Modo invalido: %s", *mode)
+		log.Infof("Use: -mode publisher|subscriber -role painel|alertas")
 		os.Exit(1)
 	}
 }

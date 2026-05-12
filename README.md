@@ -1,34 +1,22 @@
-# Middleware Publish/Subscribe
+# Middleware Publish/Subscribe (Go)
 
-Middleware para troca de mensagens entre processos distribuídos utilizando arquitetura Pub/Sub.
+Middleware para troca de mensagens entre processos distribuidos utilizando arquitetura Pub/Sub.
 
 ## Estrutura do Projeto
 
 ```
-middleware-pubsub/
-├── broker/           # Servidor broker
-├── client/           # Biblioteca cliente
-├── examples/         # Aplicações de exemplo
-├── go.mod           # Módulo Go
-└── README.md        # Este arquivo
+Projeto---Middleware-Publish-Subscribe/
+├── broker/            # Servidor broker (Go)
+├── client/            # Biblioteca cliente (Go)
+├── common/            # Tipos compartilhados e logger
+├── examples/          # Aplicacoes de exemplo
+├── .env               # Variaveis locais (opcional)
+├── .env.example       # Exemplo de variaveis
+├── go.mod             # Modulo Go
+└── README.md          # Este arquivo
 ```
 
-## Componentes
-
-### Broker (`broker/`)
-- **main.go**: Inicializa e executa o broker
-- **broker.go**: Lógica principal do broker (gerenciamento de tópicos, inscrições e roteamento)
-
-### Client (`client/`)
-- **client.go**: Biblioteca cliente para publicar e se inscrever em tópicos
-
-### Examples (`examples/`)
-- **publisher1.go**: Primeira aplicação publicadora
-- **publisher2.go**: Segunda aplicação publicadora
-- **subscriber1.go**: Primeira aplicação consumidora
-- **subscriber2.go**: Segunda aplicação consumidora
-
-## Protocolo de Comunicação
+## Protocolo de Comunicacao
 
 Troca de mensagens via JSON (um objeto por linha). Campos principais:
 
@@ -52,38 +40,60 @@ Regras importantes:
 - Se nao houver inscritos no topico, o `publish` responde com `ok=false` e `error="no_subscribers"`.
 - Mensagens sao bufferizadas por topico, entao o broker continua aceitando novos `publish`.
 
+## Variaveis de Ambiente
+
+- `BROKER_ADDR`: lista de brokers (ex: `localhost:9000,localhost:9001`).
+- Se nao for definido, o padrao e usar `localhost:9000` ate `localhost:9001`.
+- O arquivo `.env` e carregado automaticamente pelas aplicacoes em `examples/`.
+
 ## Balanceamento de Carga
 
-O cliente aceita varios brokers no parametro `brokerAddr` (ex: `"localhost:9000,localhost:9001"`).
+O cliente aceita varios brokers no parametro `brokerAddr`.
 O topico e roteado para um broker usando hash do nome do topico, garantindo que o mesmo topico
 sempre va para a mesma instancia.
 
-## Cenário de Teste
+## Cenario 2 — IoT Industrial
 
-Cenario com 4 topicos:
+Topicos:
 
-- `localizacao` e `temperatura` publicados pelo `publisher1`
-- `inscricao_usuario` e `alerta` publicados pelo `publisher2`
-- Dois subscribers consomem pares distintos de topicos
+- `temperatura_maquina`
+- `pressao`
+- `falha_motor`
+- `consumo_energia`
 
-## Como Executar
+Subscribers:
+
+- Painel industrial (role `painel`) assina 3 topicos
+- Alertas de manutencao (role `alertas`) assina todos os topicos
+
+## Como Executar (Terminais Separados)
 
 No diretorio do projeto:
 
-1. Inicie o broker:
+1. Inicie um broker:
 	- `go run ./broker -addr :9000`
-2. (Opcional) Inicie outra instancia para balanceamento:
+2. (Opcional) Inicie mais brokers para balanceamento:
 	- `go run ./broker -addr :9001`
-3. Em outro terminal, rode os publishers:
-	- `set BROKER_ADDR=localhost:9000` (Windows CMD)
-	- `go run ./examples -mode publisher1`
-	- `go run ./examples -mode publisher2`
+	- `go run ./broker -addr :9002`
+3. Em outro terminal, rode o publisher:
+	- `set BROKER_ADDR=localhost:9000,localhost:9001` (Windows CMD)
+	- `go run ./examples -mode publisher`
+4. Rode os subscribers:
+	- `go run ./examples -mode subscriber -role painel`
+	- `go run ./examples -mode subscriber -role alertas`
 
-Se estiver usando duas instancias do broker, use:
+## Teste de Multi-Broker
 
-- `set BROKER_ADDR=localhost:9000,localhost:9001`
+1. Suba brokers nas portas 9000 e 9001 (ou outra combinacao ativa).
+2. Defina `BROKER_ADDR` com a lista de portas usadas.
+3. Rode publisher/subscribers e observe os logs: cada topico sempre vai para o mesmo broker.
 
-Depois rode os subscribers:
+## Transparencia e Rebalanceamento
 
-- `go run ./examples -mode subscriber1`
-- `go run ./examples -mode subscriber2`
+- Se um broker cair, o cliente tenta outro broker disponivel automaticamente.
+- Quando o broker preferido volta, as assinaturas sao reequilibradas para ele.
+
+## Logs Coloridos
+
+Os logs sao coloridos por componente (BROKER, PUB-1, SUB-1, etc).
+Para desativar cores, defina `NO_COLOR=1` ou `LOG_NO_COLOR=1`.
